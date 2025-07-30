@@ -1,46 +1,46 @@
 <?php
 
-// 🔑 Введи свій токен тут
-$TOKEN = '8402915098:AAEooydjUEyjOghtZ_k36WehYSenfLmuDlk';
+$TOKEN = 'ТВОЙ_ТЕЛЕГРАМ_ТОКЕН';
+$ZAPIER_WEBHOOK_URL = 'https://hooks.zapier.com/hooks/catch/123456/abcdef'; // 🔁 заміни на свій
 
-// 🌐 Твій Zapier Webhook URL (заміни на свій)
-$ZAPIER_WEBHOOK_URL = 'https://hooks.zapier.com/hooks/catch/XXXXXX/YYYYYY'; // ← заміни!
-
-// Отримай дані з Telegram
 $content = file_get_contents("php://input");
 $update = json_decode($content, true);
 
-// Перевірка, чи є повідомлення
-if (!isset($update["message"])) {
-    exit;
-}
+if (!isset($update["message"])) exit;
 
-// Отримання даних
 $chat_id = $update["message"]["chat"]["id"];
-$message = $update["message"]["text"];
+$message = trim($update["message"]["text"]);
 $user_name = $update["message"]["from"]["first_name"] ?? "Анонім";
 
-// Відповіді бота
 $response = '';
+$pattern = '/([А-ЯІЄЇа-яіїєґ\'\s]{2,})[,\s]+(\+?\d{9,15})[,\s]+(\d{2}\.\d{2}\.\d{4})/u';
 
 if ($message == "/start") {
-    $response = "Привіт, $user_name! Я бот, який допоможе вам записатись до терапевта. Напишіть \"допомога\" та заповніть відповідні дані.";
-} elseif (strtolower($message) == "допомога") {
-    $response = "Щоб записатись, напишіть: Ваше ім’я, телефон, бажана дата візиту.";
+    $response = "Привіт, $user_name! Щоб записатись, напиши: Ім’я, телефон, дата (дд.мм.рррр)";
+} elseif (preg_match($pattern, $message, $matches)) {
+    $name = trim($matches[1]);
+    $phone = trim($matches[2]);
+    $date = trim($matches[3]);
+
+    $response = "Дякую, $name! Вас записано на $date. Ми зателефонуємо вам за номером $phone.";
+
+    // Надсилаємо в Zapier для Google Sheets
+    $data = [
+        'Ім’я' => $name,
+        'Телефон' => $phone,
+        'Дата візиту' => $date,
+        'Повідомлення' => $message,
+        'Telegram name' => $user_name,
+        'Час' => date("Y-m-d H:i:s")
+    ];
+
+    file_get_contents($ZAPIER_WEBHOOK_URL . '?' . http_build_query($data));
 } else {
-    $response = "Ви написали: " . $message;
+    $response = "Будь ласка, напиши дані у форматі:\nІм’я, телефон, дата (дд.мм.рррр)";
 }
 
-// Надсилання повідомлення назад у Telegram
+// Відповідь користувачу
 file_get_contents("https://api.telegram.org/bot$TOKEN/sendMessage?" . http_build_query([
     'chat_id' => $chat_id,
     'text' => $response
-]));
-
-// 🔄 Відправляємо повідомлення у Zapier
-file_get_contents($ZAPIER_WEBHOOK_URL . '?' . http_build_query([
-    'chat_id' => $chat_id,
-    'user_name' => $user_name,
-    'message' => $message,
-    'datetime' => date("Y-m-d H:i:s")
 ]));
